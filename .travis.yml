@@ -1,7 +1,10 @@
 language: c
 install:
  - sudo apt-get update -qq
- - cd src/ && sudo make deps
+ - sudo apt-get install \
+		build-essential \
+		nvidia-cuda-toolkit \
+                
 script:
  - cd src/ && make
 compiler:

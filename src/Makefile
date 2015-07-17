@@ -6,12 +6,6 @@ OBJECTS=gol.o
 gol : $(OBJECTS) 
 	$(NVCC) $(NVFLAGS) $(OBJECTS) -o $@
 
-deps:
-	apt-get install \
-		build-essential \
-		nvidia-cuda-toolkit \
-		\
-
 %.d : %.cu
 	$(NVCC) -M $(NVFLAGS) $< > $*.d
 
