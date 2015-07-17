@@ -1,4 +1,4 @@
-NVCC=nvcc
+NVCC=/usr/bin/nvcc
 CFLAGS=-Wall -Werror
 NVFLAGS=-g --compiler-options "${CFLAGS}" -v
 OBJECTS=gol.o
