@@ -1,5 +1,6 @@
 language: c
 install:
+ - sudo apt-get update -qq
  - cd src/ && sudo make deps
 script:
  - cd src/ && make
