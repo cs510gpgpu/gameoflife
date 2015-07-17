@@ -1,11 +1,14 @@
 language: c
 install:
- - wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1204/x86_64/cuda-repo-ubuntu1204_7.0-28_amd64.deb
- - sudo dpkg -i cuda-repo-ubuntu1204_7.0-28_amd64.deb
- - sudo apt-get update -qq
- - sudo apt-get install build-essential cuda-minimal-build-7.0
+- wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1204/x86_64/cuda-repo-ubuntu1204_7.0-28_amd64.deb
+- sudo dpkg -i cuda-repo-ubuntu1204_7.0-28_amd64.deb
+- sudo apt-get update -qq
+- sudo apt-get install build-essential cuda-minimal-build-7.0
 script:
- - export PATH=/usr/local/cuda-7.0/bin/:${PATH}
- - cd src/ && make
+- export PATH=/usr/local/cuda-7.0/bin/:${PATH}
+- cd src/ && make
 compiler:
- - gcc
+- gcc
+notifications:
+  slack:
+    secure: OJoM4w6Rv2fHcqB/w9RnP9uj+IfSLBW/nfju9ocjv3oZDjhSHavX5hq75uUrcyrRRP57QTZg6lP60bsQKXTq76SxFAUfptYcoXOYWrG7+i8KyiO9iRYWhybZyLnT5oETuvye9PvLHzvvbul6lfrNP8igRdYSekYLqr9IysWftrnD5OmgMdGRhAvtcY78A+w+G4Brw0ha0384laG4fS8sIOkUAUn9n4+QX3Cwe9Ud7HrC0OiKLOQ4/8OsI99zEV2pHTKoLIwrnsuyLwGmjDF+krF2Y/E8M+Gh/IxpX17bIHmtI+1YSgeoMs04wRLEp4ZZdcc47nKIn/KxCvZJ7JrZUQa22A6cnHfE7dTgXAHvkwsi3hModXDsXZySpO9FekTQkIH21PCiQCxnfyyQuPMBtN7DQq69oENZAda//p3vDBTFUeKVpSuGtoFrKj0SjTUWF1IrdDDwKHL2G2bWZnNnn8qnN5HsoAGVZ5bBTh4Mf7uyZRQW9Jar21sUJmmCF0aqlOzpwBYboTODcjvK5IvFU7m6H++FhcJw30ae70AoMo7FF8N7aan2Y/bl20H2Q9bSWUmgripQ07K5SqL8EI8SMeaAmTilf6QEtPUmVxNAKtJUipxbDk0Ix6WbHtKYZ4I/Cai7NBvTldN0U7pbcAZLdusP6KK5dm+xsYSp5RpBDIM=
