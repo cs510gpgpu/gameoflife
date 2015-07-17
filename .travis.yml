@@ -3,9 +3,9 @@ install:
  - wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1204/x86_64/cuda-repo-ubuntu1204_7.0-28_amd64.deb
  - sudo dpkg -i cuda-repo-ubuntu1204_7.0-28_amd64.deb
  - sudo apt-get update -qq
- - sudo apt-get install build-essential cuda
+ - sudo apt-get install build-essential cuda-minimal-build-7.0
 script:
- - export PATH=/usr/local/cuda/bin:${PATH}
+ - export PATH=/usr/local/cuda-7.0/bin/:${PATH}
  - cd src/ && make
 compiler:
  - gcc
