@@ -1,9 +1,7 @@
 language: c
 install:
  - sudo apt-get update -qq
- - sudo apt-get install \
-		build-essential \
-		nvidia-cuda-toolkit \
+ - sudo apt-get install build-essential nvidia-cuda-toolkit
                 
 script:
  - cd src/ && make
