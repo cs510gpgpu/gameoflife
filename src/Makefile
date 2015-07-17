@@ -1,6 +1,6 @@
 NVCC=nvcc
 CFLAGS=-Wall -Werror
-NVFLAGS=-g --compiler-options "${CFLAGS}" -v
+NVFLAGS=-g --compiler-options "${CFLAGS}"
 OBJECTS=gol.o
 
 gol : $(OBJECTS) 
