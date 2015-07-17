@@ -1,10 +1,9 @@
 language: c
 install:
- - sudo apt-get update -qq
- - sudo apt-get install build-essential
  - wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1204/x86_64/cuda-repo-ubuntu1204_7.0-28_amd64.deb
  - sudo dpkg -i cuda-repo-ubuntu1204_7.0-28_amd64.deb
-                
+ - sudo apt-get update -qq
+ - sudo apt-get install build-essential nvidia-toolkit
 script:
  - cd src/ && make
 compiler:
