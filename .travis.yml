@@ -1,0 +1,7 @@
+language: c
+install:
+ - sudo make deps
+script:
+ - cd src/ && make
+compiler:
+ - gcc
