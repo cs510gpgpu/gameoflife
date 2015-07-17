@@ -1,4 +1,5 @@
 # CS510GPGPU - Game Of Life Project
+[![Build Status](https://travis-ci.org/cs510gpgpu/gameoflife.svg)](https://travis-ci.org/cs510gpgpu/gameoflife)
 
 This is the repository for *Group B - Game Of Life Project* for *CS 410/510 Accelerated Computing with GPUs, APUs, and FPGAs*.
 
