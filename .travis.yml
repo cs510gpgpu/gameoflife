@@ -5,6 +5,7 @@ install:
  - sudo apt-get update -qq
  - sudo apt-get install build-essential cuda
 script:
+ - export PATH=/usr/local/cuda/bin:${PATH}
  - cd src/ && make
 compiler:
  - gcc
