@@ -68,3 +68,6 @@ tramp
 
 *.d
 src/gol
+
+*.ilk
+*.pdb

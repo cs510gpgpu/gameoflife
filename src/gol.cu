@@ -11,6 +11,10 @@
 #include "common.h"
 #include "nv/gpu_anim.h"
 
+#ifdef _WIN32
+#include <chrono>
+#include <thread>
+#endif
 /* assuring that any block size will be divisible by warps size */
 #define THREADS_IN_WARP 32
 #define TILE_WIDTH ((THREADS_IN_WARP) - 2)
@@ -84,8 +88,8 @@ void step(int * next, int * current, int WIDTH, int HEIGHT) {
    which has minor changes to work within a kernel space */
 __global__ void naive_compute_gol(int * next, int * board, int WIDTH, int HEIGHT)
 {    
-    uint x = (blockIdx.x * blockDim.x) + threadIdx.x;
-    uint y = (blockIdx.y * blockDim.y) + threadIdx.y;
+    int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+    int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
     if (x >= WIDTH || y >= HEIGHT) {
         return;
@@ -275,17 +279,26 @@ void gol_device(int * board, int iterations, int WIDTH, int HEIGHT)
 }
 
 void animate(int * board, int WIDTH, int HEIGHT) {
-    struct timespec delay = {0, 125000000}; // 0.125 seconds
+	#ifdef _WIN32
+	
+	#else
+	struct timespec delay = {0, 125000000}; // 0.125 seconds
     struct timespec remaining;
-    int iteration = 0;
+	#endif
+	
+	int iteration = 0;
     while (1) {
         printf("Iteration: %d\n", iteration++);
         print_board(board, WIDTH, HEIGHT);
         gol_device(board, 1, WIDTH, HEIGHT);
         // We sleep only because textual output is slow and the console needs
         // time to catch up. We don't sleep in the graphical X11 version.
-        nanosleep(&delay, &remaining);
-    }
+		#ifdef _WIN32
+		std::this_thread::sleep_for(std::chrono::milliseconds(125));
+		#else
+		nanosleep(&delay, &remaining);
+		#endif
+	}
 }
 
 struct DataBlock {

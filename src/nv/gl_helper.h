@@ -33,8 +33,8 @@
 
 #ifdef _WIN32
 /* On Windows, include the local copy of glut.h and glext.h */
-#include "GL/glut.h"
-#include "GL/glext.h"
+#include "C:\Users\Pat\Downloads\glut37\glut-3.7\include\GL\glut.h"
+#include "C:\Users\Pat\Downloads\glut37\glut-3.7\include\GL\glext.h"
 
 #define GET_PROC_ADDRESS( str ) wglGetProcAddress( str )
 
