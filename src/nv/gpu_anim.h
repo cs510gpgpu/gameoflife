@@ -19,10 +19,11 @@
 
 #include "gl_helper.h"
 
-#include "cuda.h"
-#include "cuda_gl_interop.h"
+#include <cuda.h>
+#include <cuda_gl_interop.h>
 #include <iostream>
-
+#include "../common.h"
+#define HANDLE_ERROR gpuErrchk
 
 PFNGLBINDBUFFERARBPROC    glBindBuffer     = NULL;
 PFNGLDELETEBUFFERSARBPROC glDeleteBuffers  = NULL;
@@ -58,8 +59,8 @@ struct GPUAnimBitmap {
         // a bug in the Windows GLUT implementation prevents us from
         // passing zero arguments to glutInit()
         int c=1;
-        char* dummy = "";
-        glutInit( &c, &dummy );
+        const char* dummy = "";
+        glutInit( &c, (char **)&dummy );
         glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA );
         glutInitWindowSize( width, height );
         glutCreateWindow( "bitmap" );
