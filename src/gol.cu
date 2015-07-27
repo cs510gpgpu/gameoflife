@@ -8,6 +8,8 @@
 #include <string.h> // for memcpy
 #include <stdio.h> // for printf
 #include <time.h> // for nanosleep
+#include "common.h"
+#include "nv/gpu_anim.h"
 
 /* assuring that any block size will be divisible by warps size */
 #define THREADS_IN_WARP 32
@@ -18,15 +20,6 @@ const int offsets[8][2] = {{-1, 1},{0, 1},{1, 1},
                            {-1,-1},{0,-1},{1,-1}};
 
 __constant__ int cuda_offsets[8][2];
-
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-   if (code != cudaSuccess) {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) exit(code);
-   }
-}
 
 void fill_board(int *board, int elements) {
     int i;
@@ -157,6 +150,50 @@ __global__ void tile_compute_gol(int * next, int * board, int WIDTH, int HEIGHT)
         || num_neighbors==3);
 }
 
+
+__global__ void tile_compute_gol_bitmap(uchar4* bitmap, int * next, int * board, int WIDTH, int HEIGHT)
+{
+    __shared__ int tile[TILE_WIDTH + 2][TILE_WIDTH + 2];
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int tileX = (blockIdx.x * (blockDim.x - 2)) + (threadIdx.x -1);
+    int tileY = (blockIdx.y * (blockDim.y - 2)) + (threadIdx.y -1);
+
+    /* fill the tile board with each item */
+    tile[threadIdx.x][threadIdx.y] =
+        board[((tileY + HEIGHT) % HEIGHT) * WIDTH + ((tileX + WIDTH) % WIDTH)];
+
+    if (threadIdx.x == 0 || threadIdx.y == 0 || threadIdx.x > TILE_WIDTH  || threadIdx.y > TILE_WIDTH) {
+        return; /* these threads do not contribute to answer */
+    } else if (tileX >= WIDTH || tileY >= HEIGHT) {
+        return; /* these are threads that extend over the edge since the board is not evenly divided by blocks */
+    }
+
+    __syncthreads(); /* all spots in `tile' should be full after sync */
+    int num_neighbors = 0;
+    /* does this manual loop unrolling improve speed over accessing the
+       constants in the constant memory? worth a shot */
+    num_neighbors += tile[tx +-1][ty + 1];
+    num_neighbors += tile[tx + 0][ty + 1];
+    num_neighbors += tile[tx + 1][ty + 1];
+    num_neighbors += tile[tx +-1][ty + 0];
+    num_neighbors += tile[tx + 1][ty + 0];
+    num_neighbors += tile[tx +-1][ty +-1];
+    num_neighbors += tile[tx + 0][ty +-1];
+    num_neighbors += tile[tx + 1][ty +-1];
+
+    int offset = tileY * WIDTH + tileX;
+    /* compute final result */
+    next[offset] = (
+        (tile[threadIdx.x][threadIdx.y] && num_neighbors==2)
+        || num_neighbors==3);
+
+    bitmap[offset].x = next[offset] ? 255 : 0;
+    bitmap[offset].y = next[offset] ? 255 : 0;
+    bitmap[offset].z = next[offset] ? 255 : 0;
+    bitmap[offset].w = 255;
+}
+    
 /* returns true if boards are equivalent */
 bool compare_board(int * b1, int * b2, int len)
 {
@@ -251,18 +288,63 @@ void animate(int * board, int WIDTH, int HEIGHT) {
     }
 }
 
+struct DataBlock {
+    int HEIGHT;
+    int WIDTH;
+    int * dev_board;
+    int * dev_next;
+};
+
+
+void anim_gpu( uchar4* outputBitmap, DataBlock *d, int ticks ) {
+    dim3 threadsPerBlock(TILE_WIDTH + 2, TILE_WIDTH + 2);
+    dim3 numBlocks(ceil((float)d->WIDTH / (TILE_WIDTH)),ceil((float)d->HEIGHT / (TILE_WIDTH)));
+    gpuErrchk( cudaDeviceSynchronize() ); /* wait for mem to be copied? */
+    tile_compute_gol_bitmap<<<numBlocks, threadsPerBlock>>>(outputBitmap, d->dev_next, d->dev_board, d->WIDTH, d->HEIGHT);
+    gpuErrchk( cudaPeekAtLastError() );
+    gpuErrchk( cudaDeviceSynchronize() ); /* wait for computation to complete */
+    
+    /* swap the two boards to allow memory to already be in the correct location */
+    swap_board(&d->dev_next, &d->dev_board);
+}
+
+void anim_exit( DataBlock *d ) {
+    gpuErrchk(cudaFree(d->dev_board));
+    gpuErrchk(cudaFree(d->dev_next));
+}
+
+void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
+{
+    DataBlock   d;
+    GPUAnimBitmap bitmap( WIDTH, HEIGHT, &d );
+
+    d.HEIGHT = HEIGHT;
+    d.WIDTH = WIDTH;
+    gpuErrchk(cudaMalloc((void **) &d.dev_board, sizeof(int) * WIDTH * HEIGHT));
+    gpuErrchk(cudaMalloc((void **) &d.dev_next, sizeof(int) * WIDTH * HEIGHT));
+    
+    gpuErrchk(cudaMemcpy(d.dev_board, board, sizeof(int) * WIDTH * HEIGHT, cudaMemcpyHostToDevice));
+    
+    bitmap.anim_and_exit( (void (*)(uchar4*,void*,int))anim_gpu,
+        (void (*)(void*))anim_exit );
+}
+
 int main(void) {
-    int WIDTH = 60;
-    int HEIGHT = 30;
+    int WIDTH = 1024;
+    int HEIGHT = 768;
     int elements = WIDTH * HEIGHT;
     
     int * default_board = (int *)malloc(sizeof(int) * elements);
     int * default_next = (int *)malloc(sizeof(int) * elements);
 
     int * cuda_board = (int *)malloc(sizeof(int) * elements);
-
+    srand(time(NULL));
+ 
     fill_board(default_board, elements);
     copy_board(cuda_board, default_board, elements);
+
+    gpu_gameoflife(WIDTH, HEIGHT, cuda_board);
+    
     // Sanity Check CUDA for 10 Steps (each checked)
     for (int i = 0; i < 10; i++) {
         step(default_next, default_board, WIDTH, HEIGHT);
