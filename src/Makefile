@@ -14,6 +14,10 @@ gol : $(OBJECTS)
 	$(NVCC) -M $(NVFLAGS) $< > $*.d
 	$(NVCC) -c $(NVFLAGS) $< -o $@
 
+
+test: gol
+	__GL_SYNC_TO_VBLANK=0 ./gol
+
 clean : 
 	find -iregex '.*\.\(o\|d\)$$' -exec rm {} \;
 	rm gol

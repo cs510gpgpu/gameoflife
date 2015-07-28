@@ -306,24 +306,40 @@ struct DataBlock {
     int WIDTH;
     int * dev_board;
     int * dev_next;
+    cudaEvent_t start, stop;
+    int frames;
+    float totalTime;
 };
 
 
 void anim_gpu( uchar4* outputBitmap, DataBlock *d, int ticks ) {
+    gpuErrchk( cudaEventRecord( d->start, 0 ) );
     dim3 threadsPerBlock(TILE_WIDTH + 2, TILE_WIDTH + 2);
     dim3 numBlocks(ceil((float)d->WIDTH / (TILE_WIDTH)),ceil((float)d->HEIGHT / (TILE_WIDTH)));
-    gpuErrchk( cudaDeviceSynchronize() ); /* wait for mem to be copied? */
+    
     tile_compute_gol_bitmap<<<numBlocks, threadsPerBlock>>>(outputBitmap, d->dev_next, d->dev_board, d->WIDTH, d->HEIGHT);
     gpuErrchk( cudaPeekAtLastError() );
     gpuErrchk( cudaDeviceSynchronize() ); /* wait for computation to complete */
-    
+    gpuErrchk( cudaEventRecord( d->stop, 0 ) );
+    gpuErrchk( cudaEventSynchronize( d->stop ) );
+    float   elapsedTime;
+    gpuErrchk( cudaEventElapsedTime( &elapsedTime, d->start, d->stop ) );
     /* swap the two boards to allow memory to already be in the correct location */
     swap_board(&d->dev_next, &d->dev_board);
+
+    d->totalTime += elapsedTime;
+    d->frames++;
+    if ((d->frames & 0x7F) == 0) {
+        printf( "(%d) Average Time per frame:  %3.1f ms\n",
+            d->frames, d->totalTime/d->frames );
+    }
 }
 
 void anim_exit( DataBlock *d ) {
     gpuErrchk(cudaFree(d->dev_board));
     gpuErrchk(cudaFree(d->dev_next));
+    gpuErrchk( cudaEventDestroy( d->start ) );
+    gpuErrchk( cudaEventDestroy( d->stop ) );
 }
 
 void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
@@ -333,10 +349,18 @@ void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
 
     d.HEIGHT = HEIGHT;
     d.WIDTH = WIDTH;
+    d.frames = 0;
+    d.totalTime = 0;
+    
+    gpuErrchk( cudaEventCreate( &d.start ) );
+    gpuErrchk( cudaEventCreate( &d.stop ) );
+    
     gpuErrchk(cudaMalloc((void **) &d.dev_board, sizeof(int) * WIDTH * HEIGHT));
     gpuErrchk(cudaMalloc((void **) &d.dev_next, sizeof(int) * WIDTH * HEIGHT));
     
     gpuErrchk(cudaMemcpy(d.dev_board, board, sizeof(int) * WIDTH * HEIGHT, cudaMemcpyHostToDevice));
+
+    gpuErrchk( cudaDeviceSynchronize() ); /* wait for mem to be copied */
     
     bitmap.anim_and_exit( (void (*)(uchar4*,void*,int))anim_gpu,
         (void (*)(void*))anim_exit );
