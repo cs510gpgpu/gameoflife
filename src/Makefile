@@ -5,7 +5,7 @@ OBJECTS=gol.o common.o
 RIPOBJS=ripple.o common.o
 RIPCPUOBJS=ripple_cpu.o common.o
 
-all : gol ripple
+all : gol ripple ripple_cpu
 
 gol : $(OBJECTS) 
 	$(NVCC) $(NVFLAGS) $(OBJECTS) -lGL -lGLU -lglut -o $@
