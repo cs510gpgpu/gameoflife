@@ -2,13 +2,19 @@ NVCC=nvcc
 CFLAGS=-Wall -Werror
 NVFLAGS=-g --compiler-options "${CFLAGS}"
 OBJECTS=gol.o common.o
+RIPOBJS=ripple.o common.o
 
 all : gol
 
 gol : $(OBJECTS) 
 	$(NVCC) $(NVFLAGS) $(OBJECTS) -lGL -lGLU -lglut -o $@
 
--include $(OBJECTS:.o=.d)
+-include %(OBJECTS:.o=.d)
+
+ripple : $(RIPOBJS)
+	$(NVCC) $(NVFLAGS) $(RIPOBJS) -lGL -lGLU -lglut -o $@
+
+-include $(RIPOBJS:.o=.d)
 
 %.o : %.cu
 	$(NVCC) -M $(NVFLAGS) $< > $*.d
@@ -21,3 +27,4 @@ test: gol
 clean : 
 	find -iregex '.*\.\(o\|d\)$$' -exec rm {} \;
 	rm gol
+	rm ripple
