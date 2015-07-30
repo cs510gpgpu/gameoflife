@@ -3,6 +3,7 @@ CFLAGS=-Wall -Werror
 NVFLAGS=-g --compiler-options "${CFLAGS}"
 OBJECTS=gol.o common.o
 RIPOBJS=ripple.o common.o
+RIPCPUOBJS=ripple_cpu.o common.o
 
 all : gol
 
@@ -15,6 +16,11 @@ ripple : $(RIPOBJS)
 	$(NVCC) $(NVFLAGS) $(RIPOBJS) -lGL -lGLU -lglut -o $@
 
 -include $(RIPOBJS:.o=.d)
+
+ripple_cpu : $(RIPCPUOBJS)
+	$(NVCC) $(NVFLAGS) $(RIPCPUOBJS) -lGL -lGLU -lglut -o $@
+
+-include $(RIPCPUOBJS:.o=.d)
 
 %.o : %.cu
 	$(NVCC) -M $(NVFLAGS) $< > $*.d
