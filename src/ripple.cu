@@ -1,3 +1,5 @@
+// Significant portions shamelessly stolen from Kandrot & Sanders CUDA by example
+
 #include <stdlib.h> // for rand
 #include <string.h> // for memcpy
 #include <stdio.h> // for printf
