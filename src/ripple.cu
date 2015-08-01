@@ -17,18 +17,22 @@
 
 #define SCREEN_WIDTH 1024
 #define SCREEN_HEIGHT 768
+	
+int WIDTH = 1024;
+int HEIGHT = 768;
+
 
 #define TILE_DIM 32
 
-__global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks)
+__global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH_DEV, int HEIGHT_DEV)
 {
     int x = threadIdx.x + blockIdx.x * blockDim.x;
     int y = threadIdx.y + blockIdx.y * blockDim.y;
 
     int offset = x + y * blockDim.x * gridDim.x;
 
-    float fx = x - SCREEN_WIDTH/2;
-    float fy = y - SCREEN_HEIGHT/2;
+    float fx = x - WIDTH_DEV/2;
+    float fy = y - HEIGHT_DEV/2;
     float d = sqrtf(fx * fx + fy * fy);
     unsigned char grey = (unsigned char) (128.0f + 127.0f * cos(d/10.0f - ticks/7.0f) / 
                                                             (d/10.0f + 1.0f));
@@ -40,13 +44,19 @@ __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks)
 }
 
 void generate_frame(uchar4 * bitmap, void *, int ticks) {
-    dim3 grids(SCREEN_WIDTH/TILE_DIM, SCREEN_HEIGHT/TILE_DIM);
+    dim3 grids(WIDTH/TILE_DIM, HEIGHT/TILE_DIM);
     dim3 threads(TILE_DIM, TILE_DIM);
-    compute_ripple_bitmap<<<grids, threads>>>(bitmap, ticks);
+    compute_ripple_bitmap<<<grids, threads>>>(bitmap, ticks, WIDTH, HEIGHT);
 }
 
 int main(int argc, char **argv) {    
-    GPUAnimBitmap bitmap(SCREEN_WIDTH, SCREEN_HEIGHT, NULL);
+	
+	if (argc > 1 && argc <= 3) {
+		WIDTH = atoi(argv[1]);
+		HEIGHT = atoi(argv[2]);
+	}
+	
+	GPUAnimBitmap bitmap(WIDTH, HEIGHT, NULL);
     bitmap.anim_and_exit((void (*)(uchar4*,void*,int))generate_frame, NULL);
 }
 
