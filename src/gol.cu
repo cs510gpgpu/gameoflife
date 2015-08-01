@@ -372,7 +372,7 @@ void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
 int main(int argc, char *argv[]) {
     int WIDTH = 1024;
     int HEIGHT = 768;
-	BOOL runOpenGL = true;
+	int runOpenGL = 1;
     
 	if (argc > 1 && argc <= 4) {
 		WIDTH = atoi(argv[1]);
@@ -380,10 +380,10 @@ int main(int argc, char *argv[]) {
 		
 		if (argc > 3) {
 			if (!strcmp(argv[3], "OpenGL") && argc > 3){
-				runOpenGL = true;
+				runOpenGL = 1;
 			}
 			else {
-				runOpenGL = false;
+				runOpenGL = 0;
 			}
 		}
 	}
