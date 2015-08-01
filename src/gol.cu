@@ -372,10 +372,20 @@ void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
 int main(int argc, char *argv[]) {
     int WIDTH = 1024;
     int HEIGHT = 768;
+	BOOL runOpenGL = true;
     
-	if (argc > 1 && argc <= 3) {
+	if (argc > 1 && argc <= 4) {
 		WIDTH = atoi(argv[1]);
 		HEIGHT = atoi(argv[2]);
+		
+		if (argc > 3) {
+			if (!strcmp(argv[3], "OpenGL") && argc > 3){
+				runOpenGL = true;
+			}
+			else {
+				runOpenGL = false;
+			}
+		}
 	}
 	
 	int elements = WIDTH * HEIGHT;
@@ -389,7 +399,11 @@ int main(int argc, char *argv[]) {
     fill_board(default_board, elements);
     copy_board(cuda_board, default_board, elements);
 
-    gpu_gameoflife(WIDTH, HEIGHT, cuda_board);
+	if (runOpenGL)
+	{
+		gpu_gameoflife(WIDTH, HEIGHT, cuda_board);
+	}
+    
     
     // Sanity Check CUDA for 10 Steps (each checked)
     for (int i = 0; i < 10; i++) {
