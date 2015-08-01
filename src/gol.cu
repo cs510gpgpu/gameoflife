@@ -28,7 +28,10 @@ __constant__ int cuda_offsets[8][2];
 void fill_board(int *board, int elements) {
     int i;
     for (i=0; i<elements; i++)
-        board[i] = rand() % 2;
+        board[i] = (rand() % 3) >> 1;
+		//This fix is nessary since windows rand() produces a number whose least siginificant bit
+		//	repeats every 161072 causing patterns to emerge and end the simulation more quickly
+		//  on some screen resolutions. 
 }
 
 void print_board(int *board, int WIDTH, int HEIGHT) {
@@ -366,10 +369,16 @@ void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
         (void (*)(void*))anim_exit );
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
     int WIDTH = 1024;
     int HEIGHT = 768;
-    int elements = WIDTH * HEIGHT;
+    
+	if (argc > 1 && argc <= 3) {
+		WIDTH = atoi(argv[1]);
+		HEIGHT = atoi(argv[2]);
+	}
+	
+	int elements = WIDTH * HEIGHT;
     
     int * default_board = (int *)malloc(sizeof(int) * elements);
     int * default_next = (int *)malloc(sizeof(int) * elements);
