@@ -26,5 +26,5 @@ test: gol
 
 clean : 
 	find -iregex '.*\.\(o\|d\)$$' -exec rm {} \;
-	rm gol
-	rm ripple
+	rm -f gol
+	rm -f ripple
