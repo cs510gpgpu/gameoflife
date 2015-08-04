@@ -1,9 +1,9 @@
 NVCC=nvcc
 CFLAGS=-Wall -Werror
 NVFLAGS=-g --compiler-options "${CFLAGS}"
-OBJECTS=gol.o common.o
-RIPOBJS=ripple.o common.o
-RIPCPUOBJS=ripple_cpu.o common.o
+OBJECTS=gol.o common.o argtable3.o
+RIPOBJS=ripple.o common.o argtable3.o
+RIPCPUOBJS=ripple_cpu.o common.o argtable3.o
 
 all : gol ripple ripple_cpu
 
@@ -25,7 +25,6 @@ ripple_cpu : $(RIPCPUOBJS)
 %.o : %.cu
 	$(NVCC) -M $(NVFLAGS) $< > $*.d
 	$(NVCC) -c $(NVFLAGS) $< -o $@
-
 
 test: gol
 	__GL_SYNC_TO_VBLANK=0 ./gol
