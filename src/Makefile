@@ -4,7 +4,7 @@ NVFLAGS=-g --compiler-options "${CFLAGS}"
 OBJECTS=gol.o common.o argtable3.o
 RIPOBJS=ripple.o common.o argtable3.o
 
-all : gol ripple ripple_cpu
+all : gol ripple
 
 gol : $(OBJECTS) 
 	$(NVCC) $(NVFLAGS) $(OBJECTS) -lGL -lGLU -lglut -o $@
