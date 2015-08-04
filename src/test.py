@@ -1,17 +1,57 @@
+#!/usr/bin/env python
+
 import os
 import platform
 import subprocess
+import json
+import datetime
 
-platformWinOrNix = platform.system()
+def exe(name):
+    p = platform.system().lower()
+    f = {'linux':lambda s: "./" + s,
+         'windows':lambda s: s + ".exe"}
+    return f[p](name)
+
+def compile(cfg, target, blocks=None):
+    if not blocks:
+        blocks = 32
+
+    p = platform.system().lower()
+    cmds = cfg['cmds']['platform'][p]
+    defines = {"TILE_WIDTH":blocks}
+    plat_defines = " ".join(map(lambda (k, v) : cmds['define'].format(name=k, value=v), defines.iteritems()))
+    build_cmd = cmds['build'].format(defines=plat_defines, target=target['name'])
+    subprocess.call(cmds['clean'], shell=True)
+    print build_cmd
+    subprocess.call(build_cmd, shell=True)
+    
+    for (width, height) in map(lambda r: (r[0], r[1]), cfg['resolutions']):
+        for mode in target['modes']:
+            for prof in cfg['cmds']['prof']:
+                args = {'binary':target['name'], 'block_dim':blocks, 'height':height, 'width':width, 'mode':mode}
+                result = nvprof_dir + "/" + "_".join(map(str, args.values()))
+                args['result'] = result
+                args['binary'] = exe(args['binary'])
+                prof_cmd = prof.format(**args)
+                print prof_cmd
+                subprocess.call(prof_cmd, shell=True)
+        
+def run_test(cfg, target):
+    print "Running Tests for Target:{name}".format(**target);
+
+    for block in target['blocks']:
+        compile(cfg, target, block)
 
 
-if platformWinOrNix ==  'Windows':
-    print("You are running Windows")
-    # basic output
-    run1 = subprocess.Popen(["nvprof", "--log-file", "test1.txt", "--csv", "--timeout", "30", "..\\Release\\gameoflife.exe", "1024", "768", "OpenGL"], stdout=subprocess.PIPE)
-    run1.stdout.readlines()
-    # visual profiler output                                                                                                    #these can be put in a loop and run at many variations
-    run2 = subprocess.Popen(["nvprof", "--analysis-metrics", "-o", "run1.nvprof", "--timeout", "30", "..\\Release\\gameoflife.exe", "1024", "768", "OpenGL"], stdout=subprocess.PIPE)
-    run3.stdout.readlines()
-else:
-    print("You are running Linux")
+if __name__ == "__main__":
+    d = datetime.datetime.now()
+    nvprof_dir = "nvprof-{}".format(d.isoformat())
+    f = open("test.json")
+    j = json.load(f)
+    
+    if not os.path.exists(nvprof_dir):
+        os.makedirs(nvprof_dir)
+            
+    for t in j['targets']:
+        run_test(j, t)
+            
