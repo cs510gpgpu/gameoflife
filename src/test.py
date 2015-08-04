@@ -4,10 +4,7 @@ import os
 import platform
 import subprocess
 import json
-
-nvprof_dir = "nvprof"
-f = open("test.json")
-j = json.load(f)
+import datetime
 
 def exe(name):
     p = platform.system().lower()
@@ -45,8 +42,16 @@ def run_test(cfg, target):
     for block in target['blocks']:
         compile(cfg, target, block)
 
-if not os.path.exists(nvprof_dir):
-    os.makedirs(nvprof_dir)
+
+if __name__ == "__main__":
+    d = datetime.datetime.now()
+    nvprof_dir = "nvprof-{}".format(d.isoformat())
+    f = open("test.json")
+    j = json.load(f)
     
-for t in j['targets']:
-    run_test(j, t)
+    if not os.path.exists(nvprof_dir):
+        os.makedirs(nvprof_dir)
+            
+    for t in j['targets']:
+        run_test(j, t)
+            
