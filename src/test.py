@@ -12,6 +12,12 @@ def exe(name):
          'windows':lambda s: s + ".exe"}
     return f[p](name)
 
+def sep():
+    p = platform.system().lower()
+    f = {'linux':'/',
+         'windows':'\\'}
+    return f[p]
+
 def compile(cfg, target, blocks=None):
     if not blocks:
         blocks = 32
@@ -29,7 +35,7 @@ def compile(cfg, target, blocks=None):
         for mode in target['modes']:
             for prof in cfg['cmds']['prof']:
                 args = {'binary':target['name'], 'block_dim':blocks, 'height':height, 'width':width, 'mode':mode}
-                result = nvprof_dir + "/" + "_".join(map(str, args.values()))
+                result = nvprof_dir + sep() + "_".join(map(str, args.values()))
                 args['result'] = result
                 args['binary'] = exe(args['binary'])
                 prof_cmd = prof.format(**args)
