@@ -19,10 +19,10 @@ def compile(cfg, target, blocks=None):
     p = platform.system().lower()
     cmds = cfg['cmds']['platform'][p]
     defines = {"TILE_WIDTH":blocks}
-    plat_defines = " ".join(map(lambda (k, v) : cmds['define'].format(name=k, value=v), defines.iteritems()))
+    plat_defines = " ".join(map(lambda e : cmds['define'].format(name=e[0], value=e[1]), iter(defines.items())))
     build_cmd = cmds['build'].format(defines=plat_defines, target=target['name'])
     subprocess.call(cmds['clean'], shell=True)
-    print build_cmd
+    print(build_cmd)
     subprocess.call(build_cmd, shell=True)
     
     for (width, height) in map(lambda r: (r[0], r[1]), cfg['resolutions']):
@@ -33,11 +33,11 @@ def compile(cfg, target, blocks=None):
                 args['result'] = result
                 args['binary'] = exe(args['binary'])
                 prof_cmd = prof.format(**args)
-                print prof_cmd
+                print (prof_cmd)
                 subprocess.call(prof_cmd, shell=True)
         
 def run_test(cfg, target):
-    print "Running Tests for Target:{name}".format(**target);
+    print("Running Tests for Target:{name}".format(**target))
 
     for block in target['blocks']:
         compile(cfg, target, block)
@@ -45,7 +45,7 @@ def run_test(cfg, target):
 
 if __name__ == "__main__":
     d = datetime.datetime.now()
-    nvprof_dir = "nvprof-{}".format(d.isoformat())
+    nvprof_dir = "nvprof-{}".format(d.isoformat()).replace(":", ".")
     f = open("test.json")
     j = json.load(f)
     
@@ -54,4 +54,3 @@ if __name__ == "__main__":
             
     for t in j['targets']:
         run_test(j, t)
-            
