@@ -6,33 +6,31 @@
 #include <time.h> // for nanosleep
 #include "common.h"
 #include "nv/gpu_anim.h"
+#include "nv/cpu_anim.h"
 
 #ifdef _WIN32
 #include <chrono>
 #include <thread>
 #endif
-/* assuring that any block size will be divisible by warps size */
-#define THREADS_IN_WARP 32
-#define TILE_WIDTH ((THREADS_IN_WARP) - 2)
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 768
-	
-int WIDTH = 1024;
-int HEIGHT = 768;
+#ifndef TILE_WIDTH
+#define TILE_WIDTH 32
+#endif
 
+struct GPUDataBlock {
+    int HEIGHT;
+    int WIDTH;
+};
 
-#define TILE_DIM 32
-
-__global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH_DEV, int HEIGHT_DEV)
+__global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH, int HEIGHT)
 {
     int x = threadIdx.x + blockIdx.x * blockDim.x;
     int y = threadIdx.y + blockIdx.y * blockDim.y;
 
     int offset = x + y * blockDim.x * gridDim.x;
 
-    float fx = x - WIDTH_DEV/2;
-    float fy = y - HEIGHT_DEV/2;
+    float fx = x - WIDTH/2;
+    float fy = y - HEIGHT/2;
     float d = sqrtf(fx * fx + fy * fy);
     unsigned char grey = (unsigned char) (128.0f + 127.0f * cos(d/10.0f - ticks/7.0f) / 
                                                             (d/10.0f + 1.0f));
@@ -43,20 +41,68 @@ __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH_DEV, 
     bitmap[offset].w = 255;
 }
 
-void generate_frame(uchar4 * bitmap, void *, int ticks) {
-    dim3 grids(WIDTH/TILE_DIM, HEIGHT/TILE_DIM);
-    dim3 threads(TILE_DIM, TILE_DIM);
-    compute_ripple_bitmap<<<grids, threads>>>(bitmap, ticks, WIDTH, HEIGHT);
+void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
+    dim3 grids(d->WIDTH/TILE_WIDTH, d->HEIGHT/TILE_WIDTH);
+    dim3 threads(TILE_WIDTH, TILE_WIDTH);
+    compute_ripple_bitmap<<<grids, threads>>>(bitmap, ticks, d->WIDTH, d->HEIGHT);
+}
+
+struct CPUDataBlock {
+    uchar4 *dev_bitmap;
+    CPUAnimBitmap *bitmap;
+    int HEIGHT;
+    int WIDTH;
+};
+
+void generate_frame_cpu(CPUDataBlock * d, int ticks) {
+    dim3 grids(d->WIDTH/TILE_WIDTH, d->HEIGHT/TILE_WIDTH);
+    dim3 threads(TILE_WIDTH, TILE_WIDTH);
+    compute_ripple_bitmap<<<grids, threads>>>(d->dev_bitmap, ticks, d->WIDTH, d->HEIGHT);
+
+    gpuErrchk(cudaMemcpy(d->bitmap->get_ptr(), d->dev_bitmap, d->bitmap->image_size(), cudaMemcpyDeviceToHost));
+}
+
+void cleanup_cpu(CPUDataBlock *d) {
+    cudaFree(d->dev_bitmap);
 }
 
 int main(int argc, char **argv) {    
-	
-	if (argc > 1 && argc <= 3) {
-		WIDTH = atoi(argv[1]);
-		HEIGHT = atoi(argv[2]);
-	}
-	
-	GPUAnimBitmap bitmap(WIDTH, HEIGHT, NULL);
-    bitmap.anim_and_exit((void (*)(uchar4*,void*,int))generate_frame, NULL);
+    int WIDTH = 1024;
+    int HEIGHT = 768;
+    int profile = 0;
+    MODES mode = PROFILE_NONE;
+    processArgs("ripple", argv, argc, &mode, &HEIGHT, &WIDTH, &profile);
+
+    switch(mode) {
+    case PROFILE_NONE:
+        printf("Set a profile mode. \"None\" is unimplemented.\n");
+        break;
+    case PROFILE_GPU:
+        {
+            GPUDataBlock data;            
+            data.HEIGHT = HEIGHT;
+            data.WIDTH = WIDTH;
+        	GPUAnimBitmap bitmap(data.WIDTH, data.HEIGHT, &data);
+            bitmap.anim_and_exit((void (*)(uchar4*,void*,int))generate_frame, NULL);
+        }
+        break;
+    case PROFILE_CPU:
+        {
+            CPUDataBlock data;
+            data.HEIGHT = HEIGHT;
+            data.WIDTH = WIDTH;
+            CPUAnimBitmap bitmap(data.WIDTH, data.HEIGHT, &data);
+            data.bitmap = &bitmap;
+            gpuErrchk(cudaMalloc((void**)&data.dev_bitmap, bitmap.image_size()));
+            bitmap.anim_and_exit((void (*)(void*,int))generate_frame_cpu, (void(*)(void*))cleanup_cpu);
+        }
+        break;
+    default:
+        printf("Unhandled mode by ripple.\n");
+        exit(1);
+    }
+
+        
+
 }
 
