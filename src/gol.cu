@@ -16,8 +16,10 @@
 #include <thread>
 #endif
 /* assuring that any block size will be divisible by warps size */
+#ifndef TILE_WIDTH
 #define THREADS_IN_WARP 32
 #define TILE_WIDTH ((THREADS_IN_WARP) - 2)
+#endif
 
 const int offsets[8][2] = {{-1, 1},{0, 1},{1, 1},
                            {-1, 0},       {1, 0},
@@ -230,8 +232,8 @@ void gol_naive_device(int * board, int iterations, int WIDTH, int HEIGHT)
     gpuErrchk(cudaMemcpy(dev_board, board, sizeof(int) * WIDTH * HEIGHT, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpyToSymbol(cuda_offsets, offsets, sizeof(cuda_offsets) ));
 
-    dim3 threadsPerBlock(THREADS_IN_WARP, THREADS_IN_WARP);
-    dim3 numBlocks(ceil((float)WIDTH / THREADS_IN_WARP),ceil((float)HEIGHT / THREADS_IN_WARP));
+    dim3 threadsPerBlock(TILE_WIDTH, TILE_WIDTH);
+    dim3 numBlocks(ceil((float)WIDTH / TILE_WIDTH),ceil((float)HEIGHT / TILE_WIDTH));
 
     gpuErrchk( cudaDeviceSynchronize() ); /* wait for mem to be copied? */
     for (i = 0; i < iterations; i++) {
@@ -281,26 +283,29 @@ void gol_device(int * board, int iterations, int WIDTH, int HEIGHT)
     gpuErrchk(cudaFree(dev_next));
 }
 
-void animate(int * board, int WIDTH, int HEIGHT) {
-	#ifdef _WIN32
-	
-	#else
+void animate(int * board, int WIDTH, int HEIGHT, int do_delay, int profile) {
+	#ifndef _WIN32
 	struct timespec delay = {0, 125000000}; // 0.125 seconds
     struct timespec remaining;
 	#endif
 	
 	int iteration = 0;
     while (1) {
-        printf("Iteration: %d\n", iteration++);
-        print_board(board, WIDTH, HEIGHT);
+        iteration++;
+        if (!profile) {
+            printf("Iteration: %d\n", iteration);
+            print_board(board, WIDTH, HEIGHT);
+        }
         gol_device(board, 1, WIDTH, HEIGHT);
         // We sleep only because textual output is slow and the console needs
         // time to catch up. We don't sleep in the graphical X11 version.
-		#ifdef _WIN32
-		std::this_thread::sleep_for(std::chrono::milliseconds(125));
-		#else
-		nanosleep(&delay, &remaining);
-		#endif
+        if (do_delay) {
+#ifdef _WIN32
+            std::this_thread::sleep_for(std::chrono::milliseconds(125));
+#else
+            nanosleep(&delay, &remaining);
+#endif
+        }
 	}
 }
 
@@ -369,42 +374,9 @@ void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
         (void (*)(void*))anim_exit );
 }
 
-int main(int argc, char *argv[]) {
-    int WIDTH = 1024;
-    int HEIGHT = 768;
-	int runOpenGL = 1;
-    
-	if (argc > 1 && argc <= 4) {
-		WIDTH = atoi(argv[1]);
-		HEIGHT = atoi(argv[2]);
-		
-		if (argc > 3) {
-			if (!strcmp(argv[3], "OpenGL") && argc > 3){
-				runOpenGL = 1;
-			}
-			else {
-				runOpenGL = 0;
-			}
-		}
-	}
-	
-	int elements = WIDTH * HEIGHT;
-    
-    int * default_board = (int *)malloc(sizeof(int) * elements);
-    int * default_next = (int *)malloc(sizeof(int) * elements);
-
-    int * cuda_board = (int *)malloc(sizeof(int) * elements);
-    srand(time(NULL));
- 
-    fill_board(default_board, elements);
-    copy_board(cuda_board, default_board, elements);
-
-	if (runOpenGL)
-	{
-		gpu_gameoflife(WIDTH, HEIGHT, cuda_board);
-	}
-    
-    
+void plain_old(int WIDTH, int HEIGHT, int * default_board, int * default_next, int * cuda_board, int profile)
+{
+    int elements = WIDTH * HEIGHT;
     // Sanity Check CUDA for 10 Steps (each checked)
     for (int i = 0; i < 10; i++) {
         step(default_next, default_board, WIDTH, HEIGHT);
@@ -420,7 +392,6 @@ int main(int argc, char *argv[]) {
         swap_board(&default_next, &default_board);
     }
 
-
     //Sanity Check CUDA with 10 unmonitored (completely on device) steps
     int unmonitored = 10;
     for (int i = 0; i < unmonitored; i++) {
@@ -435,13 +406,47 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    /* it appears to be sane, run the animation routine */
+    animate(cuda_board, WIDTH, HEIGHT, 1, profile);
+}
+
+
+int main(int argc, char *argv[]) {
+    int WIDTH = 1024;
+    int HEIGHT = 768;
+    int profile = 0;
+    MODES mode = PROFILE_NONE;
+    processArgs("gol", argv, argc, &mode, &HEIGHT, &WIDTH, &profile);
+    
+	int elements = WIDTH * HEIGHT;
+    
+    int * default_board = (int *)malloc(sizeof(int) * elements);
+    int * default_next = (int *)malloc(sizeof(int) * elements);
+
+    int * cuda_board = (int *)malloc(sizeof(int) * elements);
+    srand(time(NULL));
+ 
+    fill_board(default_board, elements);
+    copy_board(cuda_board, default_board, elements);
+
+    switch(mode) {
+    case PROFILE_NONE:
+        plain_old(WIDTH, HEIGHT, default_board, default_next, cuda_board, profile);
+        break;
+    case PROFILE_GPU:
+        gpu_gameoflife(WIDTH, HEIGHT, cuda_board);
+        break;
+    case PROFILE_CPU:
+        animate(cuda_board, WIDTH, HEIGHT, 0, profile);
+        break;
+    default:
+        printf("Unhandled mode by game of life.\n");
+        exit(1);
+    }
+
     /* cleanup no longer needed boards */
     free(default_board);
-    free(default_next);
-    
-    /* it appears to be sane, run the animation routine */
-    animate(cuda_board, WIDTH, HEIGHT);
-
+    free(default_next);   
     free(cuda_board);
 
     return 0;

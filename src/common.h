@@ -2,12 +2,13 @@
 #define COMMON_H
 
 enum MODES {
+    PROFILE_NONE,
     PROFILE_GPU,
-    PROFILE_CPU,
+    PROFILE_CPU,    
 };
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true);
-int processArgs(char * progname, char ** argv, int argc, MODES * m, int * h, int * w, int * p);
+int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * h, int * w, int * p);
 
 #endif

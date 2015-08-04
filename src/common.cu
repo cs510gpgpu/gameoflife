@@ -17,7 +17,7 @@ struct arg_int *height, *width;
 struct arg_str *mode;
 struct arg_end *end;
 
-int processArgs(char * progname, char ** argv, int argc, MODES * m, int * h, int * w, int * p)
+int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * h, int * w, int * p)
 {
     int do_exit = 0;
     void *argtable[] = {
@@ -62,22 +62,19 @@ int processArgs(char * progname, char ** argv, int argc, MODES * m, int * h, int
         *w = width->ival[0];
     }
     if (mode->count == 0) {
-        /* ignore */
+        *m = PROFILE_NONE;
     } else if (!strcmp(mode->sval[0], "gpu")) {
         *m = PROFILE_GPU;
     } else if (!strcmp(mode->sval[0], "cpu")) {
         *m = PROFILE_CPU;
     } else {
-        printf("Unknown mode type\n");
+        printf("Unknown mode type \"%s\" \n", mode->sval[0]);
+        do_exit = 1;
         exitcode = 1;
         goto exit;
     }
 
-    if (profile->count > 0) {
-        *p = 1;
-    } else {
-        *p = 0;
-    }
+    *p = profile->count > 0;
 exit:
     /* deallocate each non-null entry in argtable[] */
     arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
