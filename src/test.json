@@ -1,0 +1,26 @@
+{
+    "cmds":{
+        "platform":{
+            "__comment":"The following windows commands are best guess from http://stackoverflow.com/questions/166474/msbuild-set-a-specific-preprocessor-define-in-the-command-line",
+            "windows":{
+                "define":"/p:{name}={value}",
+                "build":"msbuild {defines} /t:{target}",
+                "clean":"msbuild /t:CLEAN"
+            },
+            "linux":{
+                "define":"-D{name}={value}",
+                "build":"make CFLAGS='{defines}' {target}",
+                "clean":"make clean"
+            }
+        },
+        "prof":[
+            "nvprof --log-file \"{result}.csv\" --csv --timeout 30 {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --profile",
+            "nvprof --analysis-metrics -o \"{result}.nvprof\" --csv --timeout 30 {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --profile"
+        ]
+    },
+    "resolutions":[[1280,720], [1600,900], [2560,1440], [3840, 2160]],
+    "targets":[
+        {"name":"gol", "blocks":[8,16,32], "modes":["cpu", "gpu"]},
+        {"name":"ripple", "blocks":[8,16,32], "modes":["cpu", "gpu"]}
+    ]
+}
