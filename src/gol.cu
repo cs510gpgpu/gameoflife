@@ -10,15 +10,15 @@
 #include <time.h> // for nanosleep
 #include "common.h"
 #include "nv/gpu_anim.h"
+#include <assert.h>
 
 #ifdef _WIN32
 #include <chrono>
 #include <thread>
 #endif
-/* assuring that any block size will be divisible by warps size */
+
 #ifndef TILE_WIDTH
-#define THREADS_IN_WARP 32
-#define TILE_WIDTH ((THREADS_IN_WARP) - 2)
+#define TILE_WIDTH 32
 #endif
 
 const int offsets[8][2] = {{-1, 1},{0, 1},{1, 1},
@@ -116,72 +116,33 @@ __global__ void naive_compute_gol(int * next, int * board, int WIDTH, int HEIGHT
     }
 }
 
-/* 
-The tiled approach maintains some shared memory to keep the neighboards locally stored
-for the given block. This reduces the memory overhead.
-Additionally this approach uses a manually unrolled loop iteration to remove dependency
-on constant memory for the offsets.
- */
-__global__ void tile_compute_gol(int * next, int * board, int WIDTH, int HEIGHT)
-{
-    __shared__ int tile[TILE_WIDTH + 2][TILE_WIDTH + 2];
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-    int tileX = (blockIdx.x * (blockDim.x - 2)) + (threadIdx.x -1);
-    int tileY = (blockIdx.y * (blockDim.y - 2)) + (threadIdx.y -1);
-
-    /* fill the tile board with each item */
-    tile[threadIdx.x][threadIdx.y] =
-        board[((tileY + HEIGHT) % HEIGHT) * WIDTH + ((tileX + WIDTH) % WIDTH)];
-
-    if (threadIdx.x == 0 || threadIdx.y == 0 || threadIdx.x > TILE_WIDTH  || threadIdx.y > TILE_WIDTH) {
-        return; /* these threads do not contribute to answer */
-    } else if (tileX >= WIDTH || tileY >= HEIGHT) {
-        return; /* these are threads that extend over the edge since the board is not evenly divided by blocks */
-    }
-
-    __syncthreads(); /* all spots in `tile' should be full after sync */
-    int num_neighbors = 0;
-    /* does this manual loop unrolling improve speed over accessing the
-       constants in the constant memory? worth a shot */
-    num_neighbors += tile[tx +-1][ty + 1];
-    num_neighbors += tile[tx + 0][ty + 1];
-    num_neighbors += tile[tx + 1][ty + 1];
-    num_neighbors += tile[tx +-1][ty + 0];
-    num_neighbors += tile[tx + 1][ty + 0];
-    num_neighbors += tile[tx +-1][ty +-1];
-    num_neighbors += tile[tx + 0][ty +-1];
-    num_neighbors += tile[tx + 1][ty +-1];
-
-    /* compute final result */
-    next[tileY * WIDTH + tileX] = (
-        (tile[threadIdx.x][threadIdx.y] && num_neighbors==2)
-        || num_neighbors==3);
-}
-
-
 __global__ void tile_compute_gol_bitmap(uchar4* bitmap, int * next, int * board, int WIDTH, int HEIGHT)
 {
-    __shared__ int tile[TILE_WIDTH + 2][TILE_WIDTH + 2];
+    __shared__ int tile[TILE_WIDTH][TILE_WIDTH];
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     int tileX = (blockIdx.x * (blockDim.x - 2)) + (threadIdx.x -1);
     int tileY = (blockIdx.y * (blockDim.y - 2)) + (threadIdx.y -1);
 
     /* fill the tile board with each item */
-    tile[threadIdx.x][threadIdx.y] =
-        board[((tileY + HEIGHT) % HEIGHT) * WIDTH + ((tileX + WIDTH) % WIDTH)];
+    int * target = &tile[threadIdx.x][threadIdx.y];
+    *target = board[((tileY + HEIGHT) % HEIGHT) * WIDTH + ((tileX + WIDTH) % WIDTH)];
 
-    if (threadIdx.x == 0 || threadIdx.y == 0 || threadIdx.x > TILE_WIDTH  || threadIdx.y > TILE_WIDTH) {
+    if (tx == 0 || ty == 0 || tx >= TILE_WIDTH - 1 || ty >= TILE_WIDTH - 1) {
         return; /* these threads do not contribute to answer */
     } else if (tileX >= WIDTH || tileY >= HEIGHT) {
         return; /* these are threads that extend over the edge since the board is not evenly divided by blocks */
     }
-
     __syncthreads(); /* all spots in `tile' should be full after sync */
     int num_neighbors = 0;
     /* does this manual loop unrolling improve speed over accessing the
        constants in the constant memory? worth a shot */
+
+#if DEBUG_GPU
+    assert(tx > 0 && tx < TILE_WIDTH - 1);
+    assert(ty > 0 && ty < TILE_WIDTH - 1);
+#endif
+    
     num_neighbors += tile[tx +-1][ty + 1];
     num_neighbors += tile[tx + 0][ty + 1];
     num_neighbors += tile[tx + 1][ty + 1];
@@ -192,15 +153,21 @@ __global__ void tile_compute_gol_bitmap(uchar4* bitmap, int * next, int * board,
     num_neighbors += tile[tx + 1][ty +-1];
 
     int offset = tileY * WIDTH + tileX;
+    int * next_target = &next[offset];
+#if DEBUG_GPU
+    assert(offset >= 0 && offset < HEIGHT * WIDTH);
+#endif
     /* compute final result */
-    next[offset] = (
-        (tile[threadIdx.x][threadIdx.y] && num_neighbors==2)
-        || num_neighbors==3);
+    *next_target = ((*target && (num_neighbors == 2)) || num_neighbors == 3);
 
-    bitmap[offset].x = next[offset] ? 255 : 0;
-    bitmap[offset].y = next[offset] ? 255 : 0;
-    bitmap[offset].z = next[offset] ? 255 : 0;
-    bitmap[offset].w = 255;
+    if (bitmap) {
+        int color = *next_target ? 255 : 0;
+        bitmap[offset].x = color;
+        bitmap[offset].y = color;
+        bitmap[offset].z = color;
+        bitmap[offset].w = 255;
+    }
+
 }
     
 /* returns true if boards are equivalent */
@@ -221,7 +188,7 @@ void copy_board(int * target, int * src, int len)
 }
 
 /* the naive game of life, which uses constant memory for offsets */
-void gol_naive_device(int * board, int iterations, int WIDTH, int HEIGHT)
+void gol_naive_device(int * board, int iterations, int WIDTH, int HEIGHT, int block_width)
 {
     int * dev_board;
     int * dev_next;
@@ -232,12 +199,12 @@ void gol_naive_device(int * board, int iterations, int WIDTH, int HEIGHT)
     gpuErrchk(cudaMemcpy(dev_board, board, sizeof(int) * WIDTH * HEIGHT, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpyToSymbol(cuda_offsets, offsets, sizeof(cuda_offsets) ));
 
-    dim3 threadsPerBlock(TILE_WIDTH, TILE_WIDTH);
-    dim3 numBlocks(ceil((float)WIDTH / TILE_WIDTH),ceil((float)HEIGHT / TILE_WIDTH));
+    dim3 threadsPerBlock(block_width, block_width);
+    dim3 numBlocks(ceil((float)WIDTH / block_width),ceil((float)HEIGHT / block_width));
 
     gpuErrchk( cudaDeviceSynchronize() ); /* wait for mem to be copied? */
     for (i = 0; i < iterations; i++) {
-        tile_compute_gol<<<numBlocks, threadsPerBlock>>>(dev_next, dev_board, WIDTH, HEIGHT);
+        tile_compute_gol_bitmap<<<numBlocks, threadsPerBlock>>>(NULL, dev_next, dev_board, WIDTH, HEIGHT);
         gpuErrchk( cudaPeekAtLastError() );
         gpuErrchk( cudaDeviceSynchronize() ); /* wait for computation to complete */
 
@@ -253,7 +220,7 @@ void gol_naive_device(int * board, int iterations, int WIDTH, int HEIGHT)
 }
 
 /* the tiled game of life management function */
-void gol_device(int * board, int iterations, int WIDTH, int HEIGHT)
+void gol_device(int * board, int iterations, int WIDTH, int HEIGHT, int block_width)
 {
     int * dev_board;
     int * dev_next;
@@ -263,12 +230,12 @@ void gol_device(int * board, int iterations, int WIDTH, int HEIGHT)
     
     gpuErrchk(cudaMemcpy(dev_board, board, sizeof(int) * WIDTH * HEIGHT, cudaMemcpyHostToDevice));
     /* this will "over" allocate threads, to fully populate shared memory on each block */
-    dim3 threadsPerBlock(TILE_WIDTH + 2, TILE_WIDTH + 2);
-    dim3 numBlocks(ceil((float)WIDTH / (TILE_WIDTH)),ceil((float)HEIGHT / (TILE_WIDTH)));
+    dim3 threadsPerBlock(block_width, block_width);
+    dim3 numBlocks(ceil((float)WIDTH / (block_width - 2)),ceil((float)HEIGHT / (block_width - 2)));
 
     gpuErrchk( cudaDeviceSynchronize() ); /* wait for mem to be copied? */
     for (i = 0; i < iterations; i++) {
-        tile_compute_gol<<<numBlocks, threadsPerBlock>>>(dev_next, dev_board, WIDTH, HEIGHT);
+        tile_compute_gol_bitmap<<<numBlocks, threadsPerBlock>>>(NULL, dev_next, dev_board, WIDTH, HEIGHT);
         gpuErrchk( cudaPeekAtLastError() );
         gpuErrchk( cudaDeviceSynchronize() ); /* wait for computation to complete */
 
@@ -283,7 +250,7 @@ void gol_device(int * board, int iterations, int WIDTH, int HEIGHT)
     gpuErrchk(cudaFree(dev_next));
 }
 
-void animate(int * board, int WIDTH, int HEIGHT, int do_delay, int profile) {
+void animate(int * board, int WIDTH, int HEIGHT, int block_width, int do_delay, int profile) {
 	#ifndef _WIN32
 	struct timespec delay = {0, 125000000}; // 0.125 seconds
     struct timespec remaining;
@@ -296,7 +263,7 @@ void animate(int * board, int WIDTH, int HEIGHT, int do_delay, int profile) {
             printf("Iteration: %d\n", iteration);
             print_board(board, WIDTH, HEIGHT);
         }
-        gol_device(board, 1, WIDTH, HEIGHT);
+        gol_device(board, 1, WIDTH, HEIGHT, block_width);
         // We sleep only because textual output is slow and the console needs
         // time to catch up. We don't sleep in the graphical X11 version.
         if (do_delay) {
@@ -317,13 +284,16 @@ struct DataBlock {
     cudaEvent_t start, stop;
     int frames;
     float totalTime;
+    int profile;
+    int block_width;
 };
 
 
 void anim_gpu( uchar4* outputBitmap, DataBlock *d, int ticks ) {
     gpuErrchk( cudaEventRecord( d->start, 0 ) );
-    dim3 threadsPerBlock(TILE_WIDTH + 2, TILE_WIDTH + 2);
-    dim3 numBlocks(ceil((float)d->WIDTH / (TILE_WIDTH)),ceil((float)d->HEIGHT / (TILE_WIDTH)));
+    dim3 threadsPerBlock(d->block_width, d->block_width);
+    dim3 numBlocks(ceil((float)d->WIDTH / (d->block_width - 2)),ceil((float)d->HEIGHT / (d->block_width - 2)));
+    assert(d->block_width == TILE_WIDTH);
     
     tile_compute_gol_bitmap<<<numBlocks, threadsPerBlock>>>(outputBitmap, d->dev_next, d->dev_board, d->WIDTH, d->HEIGHT);
     gpuErrchk( cudaPeekAtLastError() );
@@ -337,7 +307,7 @@ void anim_gpu( uchar4* outputBitmap, DataBlock *d, int ticks ) {
 
     d->totalTime += elapsedTime;
     d->frames++;
-    if ((d->frames & 0x7F) == 0) {
+    if ((d->frames & 0x7F) == 0 && !d->profile) {
         printf( "(%d) Average Time per frame:  %3.1f ms\n",
             d->frames, d->totalTime/d->frames );
     }
@@ -350,7 +320,7 @@ void anim_exit( DataBlock *d ) {
     gpuErrchk( cudaEventDestroy( d->stop ) );
 }
 
-void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
+void gpu_gameoflife(int WIDTH, int HEIGHT, int block_width, int * board, int profile)
 {
     DataBlock   d;
     GPUAnimBitmap bitmap( WIDTH, HEIGHT, &d );
@@ -359,6 +329,8 @@ void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
     d.WIDTH = WIDTH;
     d.frames = 0;
     d.totalTime = 0;
+    d.profile = profile;
+    d.block_width = block_width;
     
     gpuErrchk( cudaEventCreate( &d.start ) );
     gpuErrchk( cudaEventCreate( &d.stop ) );
@@ -374,13 +346,13 @@ void gpu_gameoflife(int WIDTH, int HEIGHT, int * board)
         (void (*)(void*))anim_exit );
 }
 
-void plain_old(int WIDTH, int HEIGHT, int * default_board, int * default_next, int * cuda_board, int profile)
+void plain_old(int WIDTH, int HEIGHT, int block_width, int * default_board, int * default_next, int * cuda_board, int profile)
 {
     int elements = WIDTH * HEIGHT;
     // Sanity Check CUDA for 10 Steps (each checked)
     for (int i = 0; i < 10; i++) {
         step(default_next, default_board, WIDTH, HEIGHT);
-        gol_device(cuda_board, 1, WIDTH, HEIGHT);
+        gol_device(cuda_board, 1, WIDTH, HEIGHT, block_width);
         
         if (!compare_board(cuda_board, default_next, elements)) {
             print_board(cuda_board, WIDTH, HEIGHT);
@@ -398,7 +370,7 @@ void plain_old(int WIDTH, int HEIGHT, int * default_board, int * default_next, i
         step(default_next, default_board, WIDTH, HEIGHT);
         swap_board(&default_next, &default_board);
     }
-    gol_device(cuda_board, unmonitored, WIDTH, HEIGHT);
+    gol_device(cuda_board, unmonitored, WIDTH, HEIGHT, block_width);
     if (!compare_board(cuda_board, default_board, elements)) {
         print_board(cuda_board, WIDTH, HEIGHT);
         print_board(default_board, WIDTH, HEIGHT);
@@ -407,7 +379,7 @@ void plain_old(int WIDTH, int HEIGHT, int * default_board, int * default_next, i
     }
 
     /* it appears to be sane, run the animation routine */
-    animate(cuda_board, WIDTH, HEIGHT, 1, profile);
+    animate(cuda_board, WIDTH, HEIGHT, block_width, 1, profile);
 }
 
 
@@ -415,8 +387,9 @@ int main(int argc, char *argv[]) {
     int WIDTH = 1024;
     int HEIGHT = 768;
     int profile = 0;
+    int block_width = 32;
     MODES mode = PROFILE_NONE;
-    processArgs("gol", argv, argc, &mode, &HEIGHT, &WIDTH, &profile);
+    processArgs("gol", argv, argc, &mode, &HEIGHT, &WIDTH, &block_width, &profile);
     
 	int elements = WIDTH * HEIGHT;
     
@@ -431,13 +404,13 @@ int main(int argc, char *argv[]) {
 
     switch(mode) {
     case PROFILE_NONE:
-        plain_old(WIDTH, HEIGHT, default_board, default_next, cuda_board, profile);
+        plain_old(WIDTH, HEIGHT, block_width, default_board, default_next, cuda_board, profile);
         break;
     case PROFILE_GPU:
-        gpu_gameoflife(WIDTH, HEIGHT, cuda_board);
+        gpu_gameoflife(WIDTH, HEIGHT, block_width, cuda_board, profile);
         break;
     case PROFILE_CPU:
-        animate(cuda_board, WIDTH, HEIGHT, 0, profile);
+        animate(cuda_board, WIDTH, HEIGHT, block_width, 0, profile);
         break;
     default:
         printf("Unhandled mode by game of life.\n");

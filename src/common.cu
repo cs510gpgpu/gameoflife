@@ -13,17 +13,18 @@ void gpuAssert(cudaError_t code, const char *file, int line, bool abort)
 
 
 struct arg_lit *help, *profile;
-struct arg_int *height, *width;
+struct arg_int *height, *width, *block_width;
 struct arg_str *mode;
 struct arg_end *end;
 
-int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * h, int * w, int * p)
+int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * h, int * w, int * bw, int * p)
 {
     int do_exit = 0;
     void *argtable[] = {
         help    = arg_litn(NULL, "help",  0, 1, "display this help and exit"),       
         height  = arg_intn(NULL, "height","<n>", 0, 1,   "height"),
         width   = arg_intn(NULL, "width", "<n>",  0, 1, "width"),
+        block_width = arg_intn(NULL, "blockwidth", "<n>",  0, 1, "block width"),
         mode    = arg_strn(NULL, "mode", "modename",  0, 1, "allowed modes: gpu cpu"),
         profile = arg_litn(NULL, "profile", 0, 1, "disables text output"),
         end     = arg_end(20),
@@ -61,6 +62,11 @@ int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * 
     if (width->count > 0) {
         *w = width->ival[0];
     }
+
+    if (block_width->count > 0) {
+        *bw = block_width->ival[0];
+    }
+    
     if (mode->count == 0) {
         *m = PROFILE_NONE;
     } else if (!strcmp(mode->sval[0], "gpu")) {

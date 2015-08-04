@@ -13,13 +13,10 @@
 #include <thread>
 #endif
 
-#ifndef TILE_WIDTH
-#define TILE_WIDTH 32
-#endif
-
 struct GPUDataBlock {
     int HEIGHT;
     int WIDTH;
+    int block_width;
 };
 
 __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH, int HEIGHT)
@@ -42,8 +39,8 @@ __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH, int 
 }
 
 void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
-    dim3 grids(d->WIDTH/TILE_WIDTH, d->HEIGHT/TILE_WIDTH);
-    dim3 threads(TILE_WIDTH, TILE_WIDTH);
+    dim3 grids(d->WIDTH/d->block_width, d->HEIGHT/d->block_width);
+    dim3 threads(d->block_width, d->block_width);
     compute_ripple_bitmap<<<grids, threads>>>(bitmap, ticks, d->WIDTH, d->HEIGHT);
 }
 
@@ -52,11 +49,12 @@ struct CPUDataBlock {
     CPUAnimBitmap *bitmap;
     int HEIGHT;
     int WIDTH;
+    int block_width;
 };
 
 void generate_frame_cpu(CPUDataBlock * d, int ticks) {
-    dim3 grids(d->WIDTH/TILE_WIDTH, d->HEIGHT/TILE_WIDTH);
-    dim3 threads(TILE_WIDTH, TILE_WIDTH);
+    dim3 grids(d->WIDTH/d->block_width, d->HEIGHT/d->block_width);
+    dim3 threads(d->block_width, d->block_width);
     compute_ripple_bitmap<<<grids, threads>>>(d->dev_bitmap, ticks, d->WIDTH, d->HEIGHT);
 
     gpuErrchk(cudaMemcpy(d->bitmap->get_ptr(), d->dev_bitmap, d->bitmap->image_size(), cudaMemcpyDeviceToHost));
@@ -70,8 +68,9 @@ int main(int argc, char **argv) {
     int WIDTH = 1024;
     int HEIGHT = 768;
     int profile = 0;
+    int block_width = 32;
     MODES mode = PROFILE_NONE;
-    processArgs("ripple", argv, argc, &mode, &HEIGHT, &WIDTH, &profile);
+    processArgs("ripple", argv, argc, &mode, &HEIGHT, &WIDTH, &block_width, &profile);
 
     switch(mode) {
     case PROFILE_NONE:
@@ -82,6 +81,7 @@ int main(int argc, char **argv) {
             GPUDataBlock data;            
             data.HEIGHT = HEIGHT;
             data.WIDTH = WIDTH;
+            data.block_width = block_width;
         	GPUAnimBitmap bitmap(data.WIDTH, data.HEIGHT, &data);
             bitmap.anim_and_exit((void (*)(uchar4*,void*,int))generate_frame, NULL);
         }
@@ -91,6 +91,7 @@ int main(int argc, char **argv) {
             CPUDataBlock data;
             data.HEIGHT = HEIGHT;
             data.WIDTH = WIDTH;
+            data.block_width = block_width;
             CPUAnimBitmap bitmap(data.WIDTH, data.HEIGHT, &data);
             data.bitmap = &bitmap;
             gpuErrchk(cudaMalloc((void**)&data.dev_bitmap, bitmap.image_size()));
@@ -101,8 +102,4 @@ int main(int argc, char **argv) {
         printf("Unhandled mode by ripple.\n");
         exit(1);
     }
-
-        
-
 }
-
