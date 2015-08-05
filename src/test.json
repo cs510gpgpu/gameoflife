@@ -15,7 +15,7 @@
         },
         "prof":[
             "nvprof --log-file \"{result}.csv\" --csv --timeout 30 {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --profile",
-            "nvprof --analysis-metrics -o \"{result}.nvprof\" --csv --timeout 30 {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --profile"
+            "nvprof --analysis-metrics -o \"{result}.nvprof\" --timeout 30 {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --profile"
         ]
     },
     "resolutions":[[1280,720], [1600,900], [2560,1440], [3840, 2160]],
