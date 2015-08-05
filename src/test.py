@@ -50,6 +50,7 @@ def run_test(cfg, target):
 
 
 if __name__ == "__main__":
+    os.environ['__GL_SYNC_TO_VBLANK'] = '0' # disables vsync in linux
     d = datetime.datetime.now()
     nvprof_dir = "nvprof-{}".format(d.isoformat()).replace(":", ".")
     f = open("test.json")
