@@ -23,6 +23,10 @@ __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH, int 
 {
     int x = threadIdx.x + blockIdx.x * blockDim.x;
     int y = threadIdx.y + blockIdx.y * blockDim.y;
+    
+    if (x >= WIDTH || y >= HEIGHT) {
+        return;
+    }
 
     int offset = x + y * blockDim.x * gridDim.x;
 
@@ -39,7 +43,7 @@ __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH, int 
 }
 
 void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
-    dim3 grids(d->WIDTH/d->block_width, d->HEIGHT/d->block_width);
+    dim3 grids(ceil((float)d->WIDTH/d->block_width), ceil((float)d->HEIGHT/d->block_width));
     dim3 threads(d->block_width, d->block_width);
     compute_ripple_bitmap<<<grids, threads>>>(bitmap, ticks, d->WIDTH, d->HEIGHT);
 }
@@ -53,7 +57,7 @@ struct CPUDataBlock {
 };
 
 void generate_frame_cpu(CPUDataBlock * d, int ticks) {
-    dim3 grids(d->WIDTH/d->block_width, d->HEIGHT/d->block_width);
+    dim3 grids(ceil((float)d->WIDTH/d->block_width), ceil((float)d->HEIGHT/d->block_width));
     dim3 threads(d->block_width, d->block_width);
     compute_ripple_bitmap<<<grids, threads>>>(d->dev_bitmap, ticks, d->WIDTH, d->HEIGHT);
 
