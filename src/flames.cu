@@ -14,7 +14,7 @@
 #include <thread>
 #endif
 
-#define SAMPLES (1<<20)
+#define SAMPLES (2000000)
 
 typedef struct Point_t {
     float x;
@@ -40,6 +40,23 @@ typedef struct Fractal_t {
     struct Coef_t coef[FRACTAL_SIZE];
     int n;
 } * Fractal;
+
+void PlaneHammersley(struct Point_t *result, int n)
+{
+    float p, u, v;
+    int k, kk;
+    for (k=0 ; k<n ; k++) {
+        u = 0;
+        for (p=0.5, kk=k ; kk ; p*=0.5, kk>>=1) {
+            if (kk & 1) {
+                u += p;
+            }
+        }
+        v = (k + 0.5) / n;
+        result[k].x = u;
+        result[k].y = v;
+    }
+}
 
 /* https://github.com/jameswmccarty/Fractal-Flame-Algorithm-in-C/blob/master/fractal.c */
 float randf(float lo, float hi)
@@ -297,15 +314,7 @@ int main(int argc, char **argv) {
             data.block_width = block_width;
             data.points = (Point)malloc(sizeof(struct Point_t) * SAMPLES);
             gpuErrchk(cudaMalloc((void **) &data.dev_points, sizeof(struct Point_t) * SAMPLES));
-            for (int x = 0; x < SAMPLES; x++) {
-#if 0
-                data.points[x].x = randf(0, WIDTH);
-                data.points[x].y = randf(0, HEIGHT);
-#else
-                data.points[x].x = randf(-1, 1);
-                data.points[x].y = randf(-1, 1);
-#endif
-            }
+            PlaneHammersley(data.points, SAMPLES);
             gpuErrchk(cudaMemcpy(data.dev_points, data.points, sizeof(struct Point_t) * SAMPLES, cudaMemcpyHostToDevice));
         	GPUAnimBitmap bitmap(data.WIDTH, data.HEIGHT, &data);
             cudaMemcpyToSymbol(cuda_fractal, &f, sizeof(struct Fractal_t) );
