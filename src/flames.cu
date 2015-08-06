@@ -15,6 +15,8 @@
 #endif
 
 #define SAMPLES (2000000)
+#define FRACTAL_SIZE 20
+#define WARP_SIZE 32
 
 typedef struct Point_t {
     float x;
@@ -33,8 +35,6 @@ struct GPUDataBlock {
     int WIDTH;
     int block_width;
 };
-
-#define FRACTAL_SIZE 3
 
 typedef struct Fractal_t {
     struct Coef_t coef[FRACTAL_SIZE];
@@ -174,7 +174,7 @@ __device__ void v_19(Point out, Point in)
 
 __device__ void nextColor(uchar4 * out, Coef coef)
 {
-#define C(_color_) out->_color_ = (out-> _color_ + coef->color._color_) / 2
+#define C(_color_) out->_color_ = (((unsigned int)out-> _color_ + coef->color._color_) / 2)
     C(x);
     C(y);
     C(z);
@@ -201,10 +201,8 @@ __device__ void fromSpace(int * x, int * y, Point in, int width, int height)
     *y = in->y * (height / 2.0) + height / 2.0;
 }
 
-#define WARP_SIZE 32
-
 __constant__ struct Fractal_t cuda_fractal;
-__global__ void compute_flames(uchar4* bitmap, struct Point_t *points, int i, int WIDTH, int HEIGHT)
+__global__ void compute_flames(uchar4* bitmap, struct Point_t *points, int offset, int i, int WIDTH, int HEIGHT)
 {
     if (threadIdx.x + blockIdx.x * blockDim.x >= SAMPLES) {
         return;
@@ -213,9 +211,9 @@ __global__ void compute_flames(uchar4* bitmap, struct Point_t *points, int i, in
     struct Point_t old = *p;
     Coef c = &cuda_fractal.coef[i];
 
-    V_func fn[] = {v_0, v_1, v_2, v_3, v_18, v_19};
+    const V_func fn[] = {v_0, v_1, v_2, v_3, v_18, v_19};
     int fn_cnt = (sizeof(fn) / sizeof(V_func));
-    int fn_idx = ((threadIdx.x + blockIdx.x * blockDim.x) / WARP_SIZE) % fn_cnt;
+    int fn_idx = ((threadIdx.x + blockIdx.x * blockDim.x) / WARP_SIZE + offset) % fn_cnt;
     
     p->x = c->a * old.x + c->b * old.y + c->c;
     p->y = c->d * old.x + c->e * old.y + c->f;
@@ -230,6 +228,8 @@ __global__ void compute_flames(uchar4* bitmap, struct Point_t *points, int i, in
         }
     }
 }
+
+
 
 __global__ void clearScreen(uchar4* bitmap, int WIDTH, int HEIGHT)
 {
@@ -251,6 +251,7 @@ void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
     dim3 grids(ceil(SAMPLES/d->block_width), 1);
     dim3 threads(1024, 1);
     int i = randf(0, FRACTAL_SIZE);
+    int rand_offset = rand();
     static int iterations = 0;
     if (iterations == 0){
         dim3 grids(ceil((float)d->WIDTH/d->block_width), ceil((float)d->HEIGHT/d->block_width));
@@ -259,9 +260,9 @@ void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
         gpuErrchk(cudaDeviceSynchronize());
     }
     if ( iterations < 17) {
-        compute_flames<<<grids, threads>>>(NULL, d->dev_points, i, d->WIDTH, d->HEIGHT);
+        compute_flames<<<grids, threads>>>(NULL, d->dev_points, rand_offset, i, d->WIDTH, d->HEIGHT);
     } else {
-        compute_flames<<<grids, threads>>>(bitmap, d->dev_points, i, d->WIDTH, d->HEIGHT);
+        compute_flames<<<grids, threads>>>(bitmap, d->dev_points, rand_offset, i, d->WIDTH, d->HEIGHT);
     }
     iterations++;
 
