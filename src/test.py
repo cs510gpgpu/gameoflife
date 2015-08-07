@@ -34,7 +34,7 @@ def compile(cfg, target, blocks=None):
     for (width, height) in map(lambda r: (r[0], r[1]), cfg['resolutions']):
         for mode in target['modes']:
             for prof in cfg['cmds']['prof']:
-                args = {'binary':target['name'], 'block_dim':blocks, 'height':height, 'width':width, 'mode':mode}
+                args = {'binary':target['name'], 'block_dim':blocks, 'height':height, 'width':width, 'mode':mode, 'frames':100, 'kill':240}
                 result = nvprof_dir + sep() + "_".join(map(str, args.values()))
                 args['result'] = result
                 args['binary'] = exe(args['binary'])
