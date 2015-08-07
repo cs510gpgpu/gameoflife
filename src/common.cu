@@ -11,19 +11,27 @@ void gpuAssert(cudaError_t code, const char *file, int line, bool abort)
    }
 }
 
+void timeout(Args args, int frames) {
+    printf("%d frames\n", frames);
+    if (args->timeout != 0 && args->timeout < frames) {
+        cudaDeviceReset();
+        exit(0);
+    }
+}
 
-struct arg_lit *help, *profile;
-struct arg_int *height, *width, *block_width;
-struct arg_str *mode;
-struct arg_end *end;
-
-int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * h, int * w, int * bw, int * p)
+int processArgs(const char * progname, char ** argv, int argc, Args args)
 {
+    struct arg_lit *help, *profile;
+    struct arg_int *height, *width, *block_width, *timeout;
+    struct arg_str *mode;
+    struct arg_end *end;
+
     int do_exit = 0;
     void *argtable[] = {
         help    = arg_litn(NULL, "help",  0, 1, "display this help and exit"),       
         height  = arg_intn(NULL, "height","<n>", 0, 1,   "height"),
         width   = arg_intn(NULL, "width", "<n>",  0, 1, "width"),
+        timeout = arg_intn(NULL, "timeout", "<n>",  0, 1, "timeout"),
         block_width = arg_intn(NULL, "blockwidth", "<n>",  0, 1, "block width"),
         mode    = arg_strn(NULL, "mode", "modename",  0, 1, "allowed modes: gpu cpu"),
         profile = arg_litn(NULL, "profile", 0, 1, "disables text output"),
@@ -55,24 +63,34 @@ int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * 
         do_exit = 1;
         goto exit;
     }
-
+    if (timeout->count > 0) {
+        args->timeout = timeout->ival[0];
+    } else {
+        args->timeout = 0;
+    }
     if (height->count > 0) {
-        *h = height->ival[0];
+        args->height = height->ival[0];
+    } else {
+        args->height = 768;
     }
     if (width->count > 0) {
-        *w = width->ival[0];
+        args->width = width->ival[0];
+    } else {
+        args->width = 1024;
     }
 
     if (block_width->count > 0) {
-        *bw = block_width->ival[0];
+        args->blockwidth = block_width->ival[0];
+    } else {
+        args->blockwidth = 32;
     }
     
     if (mode->count == 0) {
-        *m = PROFILE_NONE;
+        args->mode = PROFILE_NONE;
     } else if (!strcmp(mode->sval[0], "gpu")) {
-        *m = PROFILE_GPU;
+        args->mode = PROFILE_GPU;
     } else if (!strcmp(mode->sval[0], "cpu")) {
-        *m = PROFILE_CPU;
+        args->mode = PROFILE_CPU;
     } else {
         printf("Unknown mode type \"%s\" \n", mode->sval[0]);
         do_exit = 1;
@@ -80,7 +98,7 @@ int processArgs(const char * progname, char ** argv, int argc, MODES * m, int * 
         goto exit;
     }
 
-    *p = profile->count > 0;
+    args->profile = profile->count > 0;
 exit:
     /* deallocate each non-null entry in argtable[] */
     arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));

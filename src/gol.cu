@@ -27,6 +27,8 @@ const int offsets[8][2] = {{-1, 1},{0, 1},{1, 1},
 
 __constant__ int cuda_offsets[8][2];
 
+struct Args_t globalArgs;
+
 void fill_board(int *board, int elements) {
     int i;
     for (i=0; i<elements; i++)
@@ -273,7 +275,8 @@ void animate(int * board, int WIDTH, int HEIGHT, int block_width, int do_delay, 
             nanosleep(&delay, &remaining);
 #endif
         }
-	}
+        timeout(&globalArgs, iteration);
+    }
 }
 
 struct DataBlock {
@@ -311,6 +314,7 @@ void anim_gpu( uchar4* outputBitmap, DataBlock *d, int ticks ) {
         printf( "(%d) Average Time per frame:  %3.1f ms\n",
             d->frames, d->totalTime/d->frames );
     }
+    timeout(&globalArgs, d->frames);
 }
 
 void anim_exit( DataBlock *d ) {
@@ -384,14 +388,9 @@ void plain_old(int WIDTH, int HEIGHT, int block_width, int * default_board, int 
 
 
 int main(int argc, char *argv[]) {
-    int WIDTH = 1024;
-    int HEIGHT = 768;
-    int profile = 0;
-    int block_width = 32;
-    MODES mode = PROFILE_NONE;
-    processArgs("gol", argv, argc, &mode, &HEIGHT, &WIDTH, &block_width, &profile);
+    processArgs("gol", argv, argc, &globalArgs);
     
-	int elements = WIDTH * HEIGHT;
+	int elements = globalArgs.width * globalArgs.height;
     
     int * default_board = (int *)malloc(sizeof(int) * elements);
     int * default_next = (int *)malloc(sizeof(int) * elements);
@@ -402,15 +401,15 @@ int main(int argc, char *argv[]) {
     fill_board(default_board, elements);
     copy_board(cuda_board, default_board, elements);
 
-    switch(mode) {
+    switch(globalArgs.mode) {
     case PROFILE_NONE:
-        plain_old(WIDTH, HEIGHT, block_width, default_board, default_next, cuda_board, profile);
+        plain_old(globalArgs.width, globalArgs.height, globalArgs.blockwidth, default_board, default_next, cuda_board, globalArgs.profile);
         break;
     case PROFILE_GPU:
-        gpu_gameoflife(WIDTH, HEIGHT, block_width, cuda_board, profile);
+        gpu_gameoflife(globalArgs.width, globalArgs.height, globalArgs.blockwidth, cuda_board, globalArgs.profile);
         break;
     case PROFILE_CPU:
-        animate(cuda_board, WIDTH, HEIGHT, block_width, 0, profile);
+        animate(cuda_board, globalArgs.width, globalArgs.height, globalArgs.blockwidth, 0, globalArgs.profile);
         break;
     default:
         printf("Unhandled mode by game of life.\n");

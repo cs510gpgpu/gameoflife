@@ -19,6 +19,8 @@ struct GPUDataBlock {
     int block_width;
 };
 
+struct Args_t globalArgs;
+
 __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH, int HEIGHT)
 {
     int x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -43,9 +45,12 @@ __global__ void compute_ripple_bitmap(uchar4* bitmap, int ticks, int WIDTH, int 
 }
 
 void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
+    static int count = 0;
     dim3 grids(ceil((float)d->WIDTH/d->block_width), ceil((float)d->HEIGHT/d->block_width));
     dim3 threads(d->block_width, d->block_width);
+    count++;
     compute_ripple_bitmap<<<grids, threads>>>(bitmap, ticks, d->WIDTH, d->HEIGHT);
+    timeout(&globalArgs, count);
 }
 
 struct CPUDataBlock {
@@ -59,9 +64,12 @@ struct CPUDataBlock {
 void generate_frame_cpu(CPUDataBlock * d, int ticks) {
     dim3 grids(ceil((float)d->WIDTH/d->block_width), ceil((float)d->HEIGHT/d->block_width));
     dim3 threads(d->block_width, d->block_width);
+    static int count = 0;
+    count++;
     compute_ripple_bitmap<<<grids, threads>>>(d->dev_bitmap, ticks, d->WIDTH, d->HEIGHT);
 
     gpuErrchk(cudaMemcpy(d->bitmap->get_ptr(), d->dev_bitmap, d->bitmap->image_size(), cudaMemcpyDeviceToHost));
+    timeout(&globalArgs, count);
 }
 
 void cleanup_cpu(CPUDataBlock *d) {
@@ -69,12 +77,12 @@ void cleanup_cpu(CPUDataBlock *d) {
 }
 
 int main(int argc, char **argv) {    
-    int WIDTH = 1024;
-    int HEIGHT = 768;
-    int profile = 0;
-    int block_width = 32;
-    MODES mode = PROFILE_NONE;
-    processArgs("ripple", argv, argc, &mode, &HEIGHT, &WIDTH, &block_width, &profile);
+    processArgs("ripple", argv, argc, &globalArgs);
+
+    int WIDTH = globalArgs.width;
+    int HEIGHT = globalArgs.height;
+    int block_width = globalArgs.blockwidth;
+    MODES mode = globalArgs.mode;
 
     switch(mode) {
     case PROFILE_NONE:

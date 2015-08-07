@@ -14,13 +14,18 @@
             }
         },
         "prof":[
-            "nvprof --log-file \"{result}.csv\" --csv --timeout 30 {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --profile",
-            "nvprof --analysis-metrics -o \"{result}.nvprof\" --timeout 30 {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --profile"
+            "nvprof -u ms --timeout {kill} --metrics all --log-file \"{result}.metrics.csv\" --csv  {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --timeout={frames} --profile",
+            "nvprof -u ms  --timeout {kill} --events all --log-file \"{result}.events.csv\" --csv  {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --timeout={frames} --profile",
+            "nvprof -u ms  --timeout {kill} --print-summary --log-file \"{result}.summary.csv\" --csv  {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --timeout={frames} --profile",
+            "nvprof -u ms  --timeout {kill} --print-gpu-trace --log-file \"{result}.gputrace.csv\" --csv  {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --timeout={frames} --profile",
+            "nvprof -u ms  --timeout {kill} --print-api-trace --log-file \"{result}.apitrace.csv\" --csv  {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --timeout={frames} --profile",
+            "nvprof -u ms  --timeout {kill} --analysis-metrics -o \"{result}.nvprof\" {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --timeout={frames} --profile"
         ]
     },
-    "resolutions":[[1280,720], [1600,900], [2560,1440], [3840, 2160]],
+    "resolutions":[[1280,720], [1600,900]],
     "targets":[
         {"name":"gol", "blocks":[8,16,32], "modes":["cpu", "gpu"]},
         {"name":"ripple", "blocks":[8,16,32], "modes":["cpu", "gpu"]}
     ]
 }
+
