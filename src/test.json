@@ -4,7 +4,7 @@
             "__comment":"The following windows commands are best guess from http://stackoverflow.com/questions/166474/msbuild-set-a-specific-preprocessor-define-in-the-command-line",
             "windows":{
                 "define":"/p:{name}={value}",
-                "build":"msbuild {defines} /t:{target}",
+                "build":"msbuild {target}.vcxproj {defines} /p:Configuration=Release",
                 "clean":"msbuild /t:CLEAN"
             },
             "linux":{
