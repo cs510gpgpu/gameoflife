@@ -1,6 +1,6 @@
 NVCC=nvcc
 CFLAGS=-Wall -Werror
-NVFLAGS=-g --compiler-options "${CFLAGS}"
+NVFLAGS=-lineinfo -use_fast_math  -g --compiler-options "${CFLAGS}"
 OBJECTS=gol.o common.o argtable3.o
 RIPOBJS=ripple.o common.o argtable3.o
 FLAMEOBJS=flames.o common.o argtable3.o
