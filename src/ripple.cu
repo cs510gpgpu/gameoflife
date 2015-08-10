@@ -54,46 +54,42 @@ void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
 }
 
 struct CPUDataBlock {
+    GPUDataBlock gpu;
     uchar4 *dev_bitmap;
     CPUAnimBitmap *bitmap;
-    int HEIGHT;
-    int WIDTH;
-    int block_width;
 };
 
 void generate_frame_cpu(CPUDataBlock * d, int ticks) {
-    dim3 grids(ceil((float)d->WIDTH/d->block_width), ceil((float)d->HEIGHT/d->block_width));
-    dim3 threads(d->block_width, d->block_width);
-    static int count = 0;
-    count++;
-    compute_ripple_bitmap<<<grids, threads>>>(d->dev_bitmap, ticks, d->WIDTH, d->HEIGHT);
-
+    generate_frame(d->dev_bitmap, &d->gpu, ticks);
     gpuErrchk(cudaMemcpy(d->bitmap->get_ptr(), d->dev_bitmap, d->bitmap->image_size(), cudaMemcpyDeviceToHost));
-    timeout(&globalArgs, count);
+}
+
+void cleanup_gpu(GPUDataBlock *d)
+{
 }
 
 void cleanup_cpu(CPUDataBlock *d) {
+    cleanup_gpu(&d->gpu);
     cudaFree(d->dev_bitmap);
+}
+
+void init_gpu(GPUDataBlock *d)
+{
+    d->HEIGHT = globalArgs.height;
+    d->WIDTH = globalArgs.width;
+    d->block_width = globalArgs.blockwidth;
 }
 
 int main(int argc, char **argv) {    
     processArgs("ripple", argv, argc, &globalArgs);
-
-    int WIDTH = globalArgs.width;
-    int HEIGHT = globalArgs.height;
-    int block_width = globalArgs.blockwidth;
-    MODES mode = globalArgs.mode;
-
-    switch(mode) {
+    switch(globalArgs.mode) {
     case PROFILE_NONE:
         printf("Set a profile mode. \"None\" is unimplemented.\n");
         break;
     case PROFILE_GPU:
         {
             GPUDataBlock data;            
-            data.HEIGHT = HEIGHT;
-            data.WIDTH = WIDTH;
-            data.block_width = block_width;
+            init_gpu(&data);
         	GPUAnimBitmap bitmap(data.WIDTH, data.HEIGHT, &data);
             bitmap.anim_and_exit((void (*)(uchar4*,void*,int))generate_frame, NULL);
         }
@@ -101,12 +97,10 @@ int main(int argc, char **argv) {
     case PROFILE_CPU:
         {
             CPUDataBlock data;
-            data.HEIGHT = HEIGHT;
-            data.WIDTH = WIDTH;
-            data.block_width = block_width;
-            CPUAnimBitmap bitmap(data.WIDTH, data.HEIGHT, &data);
+            init_gpu(&data.gpu);
+            CPUAnimBitmap bitmap(data.gpu.WIDTH, data.gpu.HEIGHT, &data);
             data.bitmap = &bitmap;
-            gpuErrchk(cudaMalloc((void**)&data.dev_bitmap, bitmap.image_size()));
+            gpuErrchk(cudaMalloc((void**)&data.dev_bitmap, data.bitmap->image_size()));
             bitmap.anim_and_exit((void (*)(void*,int))generate_frame_cpu, (void(*)(void*))cleanup_cpu);
         }
         break;
