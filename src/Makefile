@@ -33,3 +33,4 @@ clean :
 	find -iregex '.*\.\(o\|d\)$$' -exec rm {} \;
 	rm -f gol
 	rm -f ripple
+	rm -f flames

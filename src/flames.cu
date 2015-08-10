@@ -14,8 +14,8 @@
 #include <thread>
 #endif
 
-#define SAMPLES (2000000)
-#define FRACTAL_SIZE 20
+#define SAMPLES 2000000
+#define FRACTAL_SIZE 10
 #define WARP_SIZE 32
 
 typedef struct Point_t {
@@ -71,7 +71,7 @@ int random_bit (void)
 
 void contractive_map(Coef c)
 {
-    float a, b, d, e;
+    double a, b, d, e;
     do {
         do {
             a = drand48 ();
@@ -92,10 +92,10 @@ void contractive_map(Coef c)
 
     c->a = a;
     c->b = b;
-    c->c = randf (-1, 1);
+    c->c = randf (-2, 2);
     c->d = d;
     c->e = e;
-    c->f = randf (-1, 1);
+    c->f = randf (-2, 2);
 }
 
 void init_fractal(Fractal f, int n)
@@ -178,7 +178,9 @@ __device__ void nextColor(uchar4 * out, Coef coef)
     C(x);
     C(y);
     C(z);
-    out->w = 255;
+    if (out->w < 255) {
+        out->w += 1;
+    }
 #undef C
 }
 
@@ -243,7 +245,7 @@ __global__ void clearScreen(uchar4* bitmap, int WIDTH, int HEIGHT)
         bitmap[offset].x = grey;
         bitmap[offset].y = grey;
         bitmap[offset].z = grey;
-        bitmap[offset].w = 255;
+        bitmap[offset].w = 0;
     }
 }
     
@@ -259,11 +261,9 @@ void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
         clearScreen<<<grids, threads >>>(bitmap, d->WIDTH, d->HEIGHT);
         gpuErrchk(cudaDeviceSynchronize());
     }
-    if ( iterations < 17) {
-        compute_flames<<<grids, threads>>>(NULL, d->dev_points, pt_offset, rand_offset, i, d->WIDTH, d->HEIGHT);
-    } else {
-        compute_flames<<<grids, threads>>>(bitmap, d->dev_points, pt_offset, rand_offset, i, d->WIDTH, d->HEIGHT);
-    }
+    compute_flames<<<grids, threads>>>(iterations < 17 ? NULL : bitmap,
+        d->dev_points, pt_offset, rand_offset, i, d->WIDTH, d->HEIGHT);
+    gpuErrchk(cudaDeviceSynchronize());
     iterations++;
 
 }
@@ -298,7 +298,7 @@ int main(int argc, char **argv) {
     MODES mode = PROFILE_NONE;
     processArgs("ripple", argv, argc, &mode, &HEIGHT, &WIDTH, &block_width, &profile);
     srand(time(NULL));
-    srand48 (random ());
+    srand48 (time(NULL));
  
     struct Fractal_t f;
     init_fractal(&f, 5);
