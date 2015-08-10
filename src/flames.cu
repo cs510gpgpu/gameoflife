@@ -14,11 +14,11 @@
 #include <thread>
 #endif
 
-#define SAMPLES 200000
 #define FRACTAL_SIZE 10
 #define WARP_SIZE 32
 
 #define SQUARE(_n_) ((_n_) * (_n_))
+#define SAMPLES(w, h) ((w) * (h))
 
 typedef struct Point_t {
     float x;
@@ -225,12 +225,14 @@ __device__ void fromSpace(int * x, int * y, Point in, int width, int height)
 
 __constant__ struct Fractal_t cuda_fractal;
 
+
+
 __global__ void compute_flames(uchar4* bitmap, struct Point_t *points, int pt_offset, int fn_offset, int i, int WIDTH, int HEIGHT)
 {
-    if (threadIdx.x + blockIdx.x * blockDim.x >= SAMPLES) {
+    if (threadIdx.x + blockIdx.x * blockDim.x >= SAMPLES(WIDTH, HEIGHT)) {
         return;
     }
-    int pt_idx = (threadIdx.x + blockIdx.x * blockDim.x + pt_offset) % SAMPLES;
+    int pt_idx = (threadIdx.x + blockIdx.x * blockDim.x + pt_offset) % SAMPLES(WIDTH, HEIGHT);
     Point p = &points[pt_idx];
     struct Point_t old = *p;
     struct Point_t tmp = old;
@@ -277,7 +279,7 @@ void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
         gpuErrchk(cudaDeviceSynchronize());
     }
 
-    dim3 grids(ceil((float)SAMPLES/d->block_width), 1);
+    dim3 grids(ceil((float)SAMPLES(d->WIDTH, d->HEIGHT)/d->block_width), 1);
     dim3 threads(d->block_width, 1);
     int i = randf(0, all_fn_size);
     int rand_offset = rand(), pt_offset = rand();
@@ -309,14 +311,15 @@ void cleanup_cpu(struct CPUDataBlock *d)
 void init_gpu_datablock(GPUDataBlock *d)
 {
     struct Fractal_t f;
-    init_fractal(&f, 5);    
+    init_fractal(&f, 5);
     d->HEIGHT = globalArgs.height;
     d->WIDTH = globalArgs.width;
     d->block_width = globalArgs.blockwidth;
-    d->points = (Point)malloc(sizeof(struct Point_t) * SAMPLES);
-    gpuErrchk(cudaMalloc((void **) &d->dev_points, sizeof(struct Point_t) * SAMPLES));
-    PlaneHammersley(d->points, SAMPLES);
-    gpuErrchk(cudaMemcpy(d->dev_points, d->points, sizeof(struct Point_t) * SAMPLES, cudaMemcpyHostToDevice));
+    int samples = SAMPLES(d->WIDTH, d->HEIGHT);
+    d->points = (Point)malloc(sizeof(struct Point_t) * samples);
+    gpuErrchk(cudaMalloc((void **) &d->dev_points, sizeof(struct Point_t) * samples));
+    PlaneHammersley(d->points, samples);
+    gpuErrchk(cudaMemcpy(d->dev_points, d->points, sizeof(struct Point_t) * samples, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpyToSymbol(cuda_fractal, &f, sizeof(struct Fractal_t) ));
 }
 
