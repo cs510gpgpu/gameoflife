@@ -273,8 +273,8 @@ __global__ void clearScreen(uchar4* bitmap, int WIDTH, int HEIGHT)
 void generate_frame(uchar4 * bitmap, GPUDataBlock * d, int ticks) {
     static int iterations = 0;
     if (iterations == 0) {
-        dim3 grids(ceil((float)d->WIDTH/d->block_width), ceil((float)d->HEIGHT/d->block_width));
-        dim3 threads(d->block_width, d->block_width);
+        dim3 grids(ceil((float)d->WIDTH/32), ceil((float)d->HEIGHT/32));
+        dim3 threads(32, 32);
         clearScreen<<<grids, threads >>>(bitmap, d->WIDTH, d->HEIGHT);
         gpuErrchk(cudaDeviceSynchronize());
     }

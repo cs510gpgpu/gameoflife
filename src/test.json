@@ -22,11 +22,11 @@
             "nvprof -u ms  --timeout {kill} --analysis-metrics -o \"{result}.nvprof\" {binary} --height={height} --width={width} --mode={mode} --blockwidth={block_dim} --timeout={frames} --profile"
         ]
     },
-    "resolutions":[[1280,720], [1600,900]],
+    "resolutions":[[1280,720], [1600,900], [1920,1080], [3840,2160]],
     "targets":[     
         {"name":"gol", "blocks":[8,16,32], "modes":["cpu", "gpu"]},
         {"name":"ripple", "blocks":[8,16,32], "modes":["cpu", "gpu"]},
-        {"name":"flames", "blocks":[8,16,32], "modes":["cpu", "gpu"]}
+        {"name":"flames", "blocks":[256,512,1024], "modes":["cpu", "gpu"]}
     ]
 }
 
